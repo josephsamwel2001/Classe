@@ -1,0 +1,63 @@
+<!-- claim_form.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Claim Submission Form</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="claim-card">
+            <div class="header">
+                <h1>Masese</h1>
+                <p>INSURANCE</p>
+            </div>
+            <h2>Claim Submission Form</h2>
+            <form id="claimForm">
+                <div class="input-group">
+                    <label for="policyNumber">Policy Number</label>
+                    <input type="text" id="policyNumber" placeholder="Enter Policy Number" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="policyType">Policy Type</label>
+                    <select id="policyType" required>
+                        <option value="">Select Policy Type</option>
+                        <option value="auto">Auto Insurance</option>
+                        <option value="health">Health Insurance</option>
+                        <option value="life">Life Insurance</option>
+                        <option value="home">Home Insurance</option>
+                    </select>
+                </div>
+                
+                <div class="input-group">
+                    <label for="claimAmount">Claim Amount ($)</label>
+                    <input type="number" id="claimAmount" placeholder="Enter Claim Amount" min="0" step="100" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="incidentDate">Incident Date</label>
+                    <input type="date" id="incidentDate" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="filingDate">Filing Date</label>
+                    <input type="date" id="filingDate" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="description">Incident Description</label>
+                    <textarea id="description" rows="4" placeholder="Describe the incident in detail..." required></textarea>
+                </div>
+                
+                <div class="actions">
+                    <button type="submit" class="btn-submit">Submit Claim</button>
+                    <button type="button" class="btn-cancel" id="cancelBtn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
