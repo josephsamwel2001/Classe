@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>FinGuard Dashboard | Transaction Oversight & Admin Panel</title>
+    <!-- Font Awesome 6 (Free) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css" class="rel">
+
+</head>
+<body>
+<div class="app-container">
+    <aside class="sidebar">
+        <div class="logo"><i class="fas fa-shield-alt"></i> FINTECH DASHBOARD</div>
+        <div class="nav-item active" data-nav="dashboard"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
+        <div class="nav-item" data-nav="admin"><i class="fas fa-users-cog"></i> Admin Panel</div>
+        <div class="nav-item" data-nav="logs"><i class="fas fa-history"></i> Activity Logs</div>
+        <div class="nav-item" data-nav="settings"><i class="fas fa-palette"></i> Settings</div>
+    </aside>
+    <main class="main-content" id="mainContent">
+        <div class="top-bar">
+            <h2 id="pageTitle">Transaction Dashboard</h2>
+            <div style="display: flex; gap: 12px;">
+                <div class="refresh-ring" id="refreshIndicator"><i class="fas fa-rotate-right" id="refreshIcon"></i> Auto‑refresh (2s)</div>
+                <div class="theme-toggle" id="themeToggleBtn"><i class="fas fa-moon"></i> Dark/Light</div>
+                <div class="notif-icon notification-bell" id="notifBell"><i class="fas fa-bell"></i><span id="notifBadge" class="badge-dot" style="display: none;"></span></div>
+            </div>
+        </div>
+
+        <!-- DYNAMIC VIEWS -->
+        <div id="dashboardView">
+            <!-- stats  & overview -->
+            <div class="stats-grid" id="statsGrid"></div>
+            <!-- Filter row -->
+            <div class="filter-bar">
+                <input type="date" id="startDate" placeholder="Start date">
+                <input type="date" id="endDate" placeholder="End date">
+                <select id="statusFilter"><option value="">All status</option><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
+                <input type="text" id="searchUser" placeholder="Username / ID">
+                <button id="applyFilterBtn" class="btn-primary">Filter</button>
+                <button id="resetFilterBtn">Reset</button>
+            </div>
+            <!-- transactions table -->
+            <div class="table-wrapper" id="transactionTableContainer"></div>
+        </div>
+
+        <div id="adminView" style="display: none;">
+            <div class="stats-grid"><div class="stat-card"><div class="stat-title">STAFF MEMBERS</div><div class="stat-value" id="staffCount">0</div></div></div>
+            <div style="margin-bottom: 1rem;"><button id="addStaffBtn" class="btn-primary"><i class="fas fa-plus"></i> Add Staff</button></div>
+            <div class="table-wrapper" id="staffTableWrapper"></div>
+            <div style="margin-top: 1.5rem;"><h3>Staff Activity Summary</h3><div class="table-wrapper" id="staffActivitySummary"></div></div>
+        </div>
+
+        <div id="logsView" style="display: none;">
+            <h3>Detailed Activity Logs (verifications / rejections)</h3>
+            <div class="filter-bar"><input type="text" id="logSearch" placeholder="Filter by staff name or transaction ID"></div>
+            <div class="table-wrapper" id="logsTableContainer"></div>
+        </div>
+
+        <div id="settingsView" style="display: none;"><div class="stat-card"><h3>Theme Preference</h3><button id="darkLightBtn" class="theme-toggle" style="margin-top:12px;">Toggle Dark/Light</button><p style="margin-top: 1rem;">Current theme: <span id="currentThemeLabel">light</span></p></div></div>
+    </main>
+</div>
+
+<!-- Modals: Transaction detail & staff edit/add -->
+<div id="transactionModal" class="modal"><div class="modal-content"><h3 id="modalTitle">Transaction Details</h3><div id="modalBody"></div><button id="closeModalBtn">Close</button></div></div>
+<div id="staffModal" class="modal"><div class="modal-content"><h3 id="staffModalTitle">Staff Member</h3><input type="text" id="staffName" placeholder="Full Name"><input type="text" id="staffRole" placeholder="Role (verifier/admin)"><input type="email" id="staffEmail" placeholder="Email"><button id="saveStaffBtn">Save</button><button id="cancelStaffBtn">Cancel</button><input type="hidden" id="editStaffId"></div></div>
+
+<script>
+    // ------------------- MOCK DATA MODEL -------------------
+    let transactions = [];
+    let staffMembers = [
+        { id: "s1", name: "Alice Johnson", role: "verifier", email: "alice@fin.com", logs: [] },
+        { id: "s2", name: "Bob Smith", role: "admin", email: "bob@fin.com", logs: [] },
+        { id: "s3", name: "Charlie Verif", role: "verifier", email: "charlie@fin.com", logs: [] }
+    ];
+    let activityLogs = []; // { id, timestamp, action, transactionId, staffName, oldStatus, newStatus }
+    let nextTxId = 200;
+    let nextStaffId = 4;
+    let refreshInterval = null;
+    let lastNotifCount = 0;
+    let pendingNotificationIds = new Set();
+
+    // Helper: generate random transactions
+    function generateRandomTransactions(count = 12) {
+        const usernames = ["emily_w", "jordan_m", "sarah_k", "mike_t", "lisa_c", "david_r"];
+        const wallets = ["0x7aB...3F9", "0x1bC...D44", "0xF98...2A1", "LTC...zxc", "BTC...wow"];
+        const statuses = ["pending", "verified", "rejected"];
+        const newTxs = [];
+        for (let i = 0; i < count; i++) {
+            let status = statuses[Math.floor(Math.random() * 3)];
+            let amount = +(Math.random() * 4500 + 50).toFixed(2);
+            let date = new Date(Date.now() - Math.random() * 7 * 86400000);
+            let isoDate = date.toISOString().split('T')[0];
+            let verifiedBy = status === "verified" ? staffMembers[Math.floor(Math.random() * staffMembers.length)].name : null;
+            let rejectedBy = status === "rejected" ? staffMembers[Math.floor(Math.random() * staffMembers.length)].name : null;
+            newTxs.push({
+                id: nextTxId++,
+                username: usernames[Math.floor(Math.random() * usernames.length)],
+                amount: amount,
+                walletAccount: wallets[Math.floor(Math.random() * wallets.length)],
+                status: status,
+                date: isoDate,
+                verifiedBy: verifiedBy,
+                rejectedBy: rejectedBy,
+                processedBy: status !== "pending" ? (status === "verified" ? verifiedBy : rejectedBy) : null
+            });
+        }
+        return newTxs;
+    }
+
+    function initMockData() {
+        transactions = generateRandomTransactions(18);
+        // ensure some pending
+        if(!transactions.some(t=>t.status==='pending')) transactions[0].status='pending';
+        activityLogs = [];
+        // generate logs for existing verified/rejected
+        transactions.forEach(tx => {
+            if(tx.status !== 'pending'){
+                activityLogs.push({
+                    id: Date.now()+Math.random(),
+                    timestamp: new Date().toLocaleString(),
+                    action: tx.status === 'verified' ? 'VERIFIED' : 'REJECTED',
+                    transactionId: tx.id,
+                    staffName: tx.processedBy || 'system',
+                    details: `Transaction ${tx.id} ${tx.status}`
+                });
+            }
+        });
+        updatePendingNotifications();
+    }
+
+    function updatePendingNotifications() {
+        const pendings = transactions.filter(t => t.status === 'pending').length;
+        const notifBadge = document.getElementById('notifBadge');
+        if(pendings > 0) {
+            notifBadge.style.display = 'block';
+            if(pendings > lastNotifCount && lastNotifCount !== 0) showToast(`🔔 ${pendings} new pending transactions awaiting verification`);
+        } else notifBadge.style.display = 'none';
+        lastNotifCount = pendings;
+    }
+
+    function showToast(msg) {
+        let toast = document.createElement('div');
+        toast.className = 'toast-msg';
+        toast.innerHTML = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    // stats calculation for overview
+    function computeStats(filteredTx = null) {
+        let data = filteredTx === null ? transactions : filteredTx;
+        let totalValue = data.reduce((s,t)=>s+t.amount,0);
+        let verified = data.filter(t=>t.status==='verified').length;
+        let pending = data.filter(t=>t.status==='pending').length;
+        let rejected = data.filter(t=>t.status==='rejected').length;
+        return { totalValue, verified, pending, rejected };
+    }
+
+    function renderDashboard(filterActive = false) {
+        let filtered = getFilteredTransactions();
+        let stats = computeStats(filtered);
+        document.getElementById('statsGrid').innerHTML = `
+            <div class="stat-card"><div class="stat-title">Today's Total Value</div><div class="stat-value">$${stats.totalValue.toFixed(2)}</div></div>
+            <div class="stat-card"><div class="stat-title">Verified</div><div class="stat-value" style="color:#22c55e;">${stats.verified}</div></div>
+            <div class="stat-card"><div class="stat-title">Pending</div><div class="stat-value" style="color:#f97316;">${stats.pending}</div></div>
+            <div class="stat-card"><div class="stat-title">Rejected</div><div class="stat-value" style="color:#ef4444;">${stats.rejected}</div></div>
+        `;
+        renderTransactionTable(filtered);
+        updatePendingNotifications();
+    }
+
+    function getFilteredTransactions() {
+        let start = document.getElementById('startDate').value;
+        let end = document.getElementById('endDate').value;
+        let status = document.getElementById('statusFilter').value;
+        let search = document.getElementById('searchUser').value.toLowerCase();
+        return transactions.filter(tx => {
+            if(start && tx.date < start) return false;
+            if(end && tx.date > end) return false;
+            if(status && tx.status !== status) return false;
+            if(search && !tx.username.toLowerCase().includes(search) && !tx.id.toString().includes(search)) return false;
+            return true;
+        });
+    }
+
+    function renderTransactionTable(txArray) {
+        const container = document.getElementById('transactionTableContainer');
+        if(!txArray.length){ container.innerHTML = '<div class="stat-card">No transactions found.</div>'; return; }
+        let html = `<table><thead><tr><th>ID</th><th>Username</th><th>Amount</th><th>Wallet Account</th><th>Status</th><th>Verified/Rejected By</th><th>Date</th><th>Action</th></tr></thead><tbody>`;
+        txArray.forEach(tx => {
+            let statusClass = tx.status === 'pending' ? 'pending-badge' : (tx.status==='verified' ? 'verified-badge' : 'rejected-badge');
+            let processor = tx.status==='verified'? tx.verifiedBy : (tx.status==='rejected'? tx.rejectedBy : '—');
+            html += `<tr>
+                <td>${tx.id}</td><td>${tx.username}</td><td>$${tx.amount}</td><td>${tx.walletAccount}</td>
+                <td><span class="status-badge ${statusClass}">${tx.status.toUpperCase()}</span></td>
+                <td>${processor || '—'}</td><td>${tx.date}</td>
+                <td><button class="action-btn" data-id="${tx.id}" onclick="showTransactionDetail(${tx.id})"><i class="fas fa-eye"></i> View</button></td>
+            </tr>`;
+        });
+        container.innerHTML = html + '</tbody></table>';
+    }
+
+    window.showTransactionDetail = (id) => {
+        let tx = transactions.find(t=>t.id===id);
+        if(tx){
+            document.getElementById('modalBody').innerHTML = `<p><strong>ID:</strong> ${tx.id}</p><p><strong>User:</strong> ${tx.username}</p><p><strong>Amount:</strong> $${tx.amount}</p><p><strong>Wallet:</strong> ${tx.walletAccount}</p><p><strong>Status:</strong> ${tx.status}</p><p><strong>Processed by:</strong> ${tx.processedBy || 'pending'}</p><p><strong>Date:</strong> ${tx.date}</p>`;
+            document.getElementById('transactionModal').style.display = 'flex';
+        }
+    };
+    function renderAdminPanel(){
+        document.getElementById('staffCount').innerHTML = staffMembers.length;
+        let staffHtml = `<table><thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Actions</th></tr></thead><tbody>`;
+        staffMembers.forEach(s => {
+            staffHtml += `<tr><td>${s.name}</td><td>${s.role}</td><td>${s.email}</td><td><button onclick="editStaff('${s.id}')">Edit</button> <button onclick="removeStaff('${s.id}')">Remove</button></td></tr>`;
+        });
+        staffHtml += '</tbody></table>';
+        document.getElementById('staffTableWrapper').innerHTML = staffHtml;
+        // staff activity summary
+        let summaryMap = new Map();
+        activityLogs.forEach(log => { summaryMap.set(log.staffName, (summaryMap.get(log.staffName)||0)+1); });
+        let sumHtml = `<table><thead><tr><th>Staff Member</th><th>Total Actions (Verifications/Rejections)</th></tr></thead><tbody>`;
+        for(let [name,count] of summaryMap.entries()) sumHtml += `<tr><td>${name}</td><td>${count}</td></tr>`;
+        document.getElementById('staffActivitySummary').innerHTML = sumHtml + '</tbody></table>';
+    }
+
+    window.editStaff = (id) => {
+        let staff = staffMembers.find(s=>s.id===id);
+        document.getElementById('staffModalTitle').innerText = 'Edit Staff';
+        document.getElementById('staffName').value = staff.name;
+        document.getElementById('staffRole').value = staff.role;
+        document.getElementById('staffEmail').value = staff.email;
+        document.getElementById('editStaffId').value = staff.id;
+        document.getElementById('staffModal').style.display = 'flex';
+    };
+    window.removeStaff = (id) => {
+        staffMembers = staffMembers.filter(s=>s.id!==id);
+        renderAdminPanel();
+        showToast('Staff removed');
+    };
+    function addNewStaff(name, role, email){
+        let newId = "s"+nextStaffId++;
+        staffMembers.push({id:newId, name, role, email, logs:[]});
+        renderAdminPanel();
+        showToast(`Staff ${name} added`);
+    }
+    document.getElementById('addStaffBtn')?.addEventListener('click',()=>{
+        document.getElementById('staffModalTitle').innerText = 'Add Staff';
+        document.getElementById('staffName').value = '';
+        document.getElementById('staffRole').value = 'verifier';
+        document.getElementById('staffEmail').value = '';
+        document.getElementById('editStaffId').value = '';
+        document.getElementById('staffModal').style.display = 'flex';
+    });
+    document.getElementById('saveStaffBtn')?.addEventListener('click',()=>{
+        let id = document.getElementById('editStaffId').value;
+        let name = document.getElementById('staffName').value.trim();
+        let role = document.getElementById('staffRole').value.trim();
+        let email = document.getElementById('staffEmail').value.trim();
+        if(!name) return;
+        if(id){
+            let idx = staffMembers.findIndex(s=>s.id===id);
+            if(idx!==-1){ staffMembers[idx] = {...staffMembers[idx], name,role,email}; }
+        } else { addNewStaff(name,role,email); }
+        document.getElementById('staffModal').style.display = 'none';
+        renderAdminPanel();
+    });
+    document.getElementById('cancelStaffBtn')?.addEventListener('click',()=>{ document.getElementById('staffModal').style.display = 'none'; });
+
+    function renderLogsView(){
+        let search = document.getElementById('logSearch')?.value.toLowerCase() || '';
+        let filteredLogs = activityLogs.filter(l => l.transactionId.toString().includes(search) || l.staffName.toLowerCase().includes(search));
+        let logsHtml = `<table><thead><tr><th>Timestamp</th><th>Staff</th><th>Action</th><th>Transaction ID</th><th>Details</th></tr></thead><tbody>`;
+        filteredLogs.forEach(l=>{
+            logsHtml += `<tr><td>${l.timestamp}</td><td>${l.staffName}</td><td style="color:${l.action==='VERIFIED'?'green':'red'}">${l.action}</td><td>${l.transactionId}</td><td>${l.details}</td></tr>`;
+        });
+        document.getElementById('logsTableContainer').innerHTML = logsHtml + '</tbody></table>';
+    }
+
+    // Navigation & auto refresh cycle
+    function switchView(view){
+        document.getElementById('dashboardView').style.display = view==='dashboard'?'block':'none';
+        document.getElementById('adminView').style.display = view==='admin'?'block':'none';
+        document.getElementById('logsView').style.display = view==='logs'?'block':'none';
+        document.getElementById('settingsView').style.display = view==='settings'?'block':'none';
+        if(view==='dashboard') renderDashboard();
+        if(view==='admin') renderAdminPanel();
+        if(view==='logs') renderLogsView();
+        document.getElementById('pageTitle').innerText = view==='dashboard'?'Transaction Dashboard':(view==='admin'?'Staff & Admin Panel':'Activity Logs');
+    }
+
+    // auto refresh every 2 seconds: simulate new incoming transactions + random updates
+    function startAutoRefresh(){
+        if(refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(()=>{
+            // simulate 1-2 new pending transaction or status changes
+            let newTx = generateRandomTransactions(1);
+            newTx.forEach(tx=>{ tx.status = 'pending'; tx.processedBy=null; transactions.unshift(tx); });
+            // randomly change one pending to verified/rejected with staff context (simulate verifier action)
+            let pendingTx = transactions.filter(t=>t.status==='pending');
+            if(pendingTx.length>0 && Math.random()>0.45){
+                let idx = transactions.findIndex(t=>t.id===pendingTx[0].id);
+                let newStatus = Math.random()>0.6?'verified':'rejected';
+                let randomStaff = staffMembers[Math.floor(Math.random()*staffMembers.length)];
+                transactions[idx].status = newStatus;
+                transactions[idx].processedBy = randomStaff.name;
+                if(newStatus==='verified') transactions[idx].verifiedBy = randomStaff.name;
+                else transactions[idx].rejectedBy = randomStaff.name;
+                activityLogs.unshift({ id:Date.now(), timestamp: new Date().toLocaleString(), action:newStatus.toUpperCase(), transactionId:transactions[idx].id, staffName:randomStaff.name, details:`Transaction ${transactions[idx].id} ${newStatus} by ${randomStaff.name}`});
+                if(activityLogs.length>100) activityLogs.pop();
+            }
+            updatePendingNotifications();
+            let activeView = document.querySelector('.nav-item.active')?.getAttribute('data-nav');
+            if(activeView === 'dashboard') renderDashboard();
+            if(activeView === 'logs') renderLogsView();
+            if(activeView === 'admin') renderAdminPanel();
+            // add ring animation on refresh icon
+            let icon = document.getElementById('refreshIcon');
+            icon.classList.add('spin');
+            setTimeout(()=>icon.classList.remove('spin'), 500);
+        }, 2000);
+    }
+
+    // theme
+    function initTheme(){
+        const isDark = localStorage.getItem('theme') === 'dark';
+        if(isDark) document.body.classList.add('dark');
+        document.getElementById('darkLightBtn')?.addEventListener('click',()=>{ document.body.classList.toggle('dark'); localStorage.setItem('theme',document.body.classList.contains('dark')?'dark':'light'); document.getElementById('currentThemeLabel').innerText=document.body.classList.contains('dark')?'dark':'light';});
+        document.getElementById('themeToggleBtn')?.addEventListener('click',()=>{ document.body.classList.toggle('dark'); localStorage.setItem('theme',document.body.classList.contains('dark')?'dark':'light');});
+    }
+
+    // event binding
+    document.querySelectorAll('.nav-item').forEach(item=>{
+        item.addEventListener('click',()=>{
+            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+            item.classList.add('active');
+            switchView(item.getAttribute('data-nav'));
+        });
+    });
+    document.getElementById('applyFilterBtn')?.addEventListener('click',()=>renderDashboard(true));
+    document.getElementById('resetFilterBtn')?.addEventListener('click',()=>{
+        document.getElementById('startDate').value=''; document.getElementById('endDate').value=''; document.getElementById('statusFilter').value=''; document.getElementById('searchUser').value=''; renderDashboard();
+    });
+    document.getElementById('closeModalBtn')?.addEventListener('click',()=>{document.getElementById('transactionModal').style.display='none';});
+    document.getElementById('logSearch')?.addEventListener('input',()=>renderLogsView());
+    window.onclick = (e)=>{ if(e.target.classList.contains('modal')) e.target.style.display='none'; };
+    initMockData();
+    startAutoRefresh();
+    initTheme();
+    switchView('dashboard');
+    renderDashboard();
+    setInterval(()=>{ if(document.getElementById('logsView').style.display !== 'none') renderLogsView(); }, 2100);
+</script>
+</body>
+</html>
